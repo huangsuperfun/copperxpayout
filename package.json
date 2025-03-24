@@ -1,0 +1,38 @@
+{
+    "name": "copperx-telegram-bot",
+    "version": "1.0.0",
+    "description": "Telegram bot for CopperX to manage crypto wallets and payments",
+    "main": "src/main.js",
+    "scripts": {
+        "start": "node src/main.js",
+        "dev": "nodemon src/main.js",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "keywords": [
+        "telegram",
+        "bot",
+        "cryptocurrency",
+        "copperx",
+        "crypto",
+        "wallet",
+        "usdc"
+    ],
+    "author": "CopperX",
+    "license": "MIT",
+    "dependencies": {
+        "axios": "^1.6.2",
+        "dotenv": "^16.3.1",
+        "express": "^4.18.2",
+        "ioredis": "^5.3.2",
+        "pusher-js": "^8.3.0",
+        "telegraf": "^4.15.0",
+        "uuid": "^9.0.1",
+        "winston": "^3.11.0"
+    },
+    "devDependencies": {
+        "nodemon": "^3.0.1"
+    },
+    "engines": {
+        "node": ">=16.0.0"
+    }
+}
