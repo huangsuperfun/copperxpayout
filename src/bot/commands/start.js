@@ -1,7 +1,7 @@
 const { Markup } = require('telegraf');
 const { getUserToken, makeApiRequest } = require('../../dependencies');
 const logger = require('../../utils/logger');
-const { connectToPusher } = require('../telegramBot');
+const { connectToPusher } = require('../../utils/pusherConnection');
 
 /**
  * Handle the /start command

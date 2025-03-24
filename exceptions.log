@@ -1,0 +1,9 @@
+2025-03-25 00:11:09 - ERROR: uncaughtException: request to https://api.telegram.org/bot7572569731:[REDACTED]/getMe failed, reason: 
+FetchError: request to https://api.telegram.org/bot7572569731:[REDACTED]/getMe failed, reason: 
+    at ClientRequest.<anonymous> (/Users/trung/Downloads/projectdev/bountytele/node_modules/node-fetch/lib/index.js:1501:11)
+    at ClientRequest.emit (node:events:519:28)
+    at TLSSocket.socketErrorListener (node:_http_client:500:9)
+    at TLSSocket.emit (node:events:519:28)
+    at emitErrorNT (node:internal/streams/destroy:169:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:128:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:82:21)

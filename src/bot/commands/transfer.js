@@ -1,7 +1,3 @@
-///////////////////////////////////////////////////////
-// transfer.js
-///////////////////////////////////////////////////////
-
 const { Scenes, Markup } = require('telegraf');
 const logger = require('../../utils/logger');
 const { getUserToken, makeApiRequest } = require('../../dependencies');
@@ -962,14 +958,6 @@ transferScene.action('confirm_batch_send', async (ctx) => {
     const userId = ctx.from.id;
     const payees = ctx.scene.session.data.batchPayeeData || [];
     
-    // The user wants to call /api/transfers/send-batch
-    // According to your request body, it should look like:
-    // {
-    //   requests: [
-    //     { requestId: "random-uuid", request: {...} },
-    //     ...
-    //   ]
-    // }
     const { v4: uuidv4 } = require('uuid'); // Ensure you have installed 'uuid'
     
     const requests = payees.map(p => {
