@@ -120,9 +120,9 @@ COPPERX_API_BASE_URL=https://income-api.copperx.io
 PUSHER_KEY=e089376087cac1a62785
 PUSHER_CLUSTER=ap1
 DEBUG=false
+REDIS_URL=redis://localhost:6379
 WEBHOOK_URL=https://your-server-domain.com
 WEBHOOK_SECRET_PATH=/webhook
-PORT=3000
 ```
 
 2. Set up a server with HTTPS (required for webhooks)
@@ -165,3 +165,4 @@ Review the logs for error messages. They are typically found in the console outp
 - The bot uses polling in development mode and can switch to webhook mode in production
 - Debug mode (`DEBUG=true`) enables additional commands like `/test_deposit`
 - Redis is optional for token storage; without it, the bot uses in-memory storage
+- KYC does not support my country so I cannot develop and test out the bank withdrawal flow but I'm happy to build it if I'm given a KYCed account
