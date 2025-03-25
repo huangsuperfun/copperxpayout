@@ -8,12 +8,13 @@ const { getUserToken, makeApiRequest } = require('../../dependencies');
 const { getFormattedWalletBalances } = require('../../services/walletService');
 const { getPayees, addPayee } = require('../../services/payeeService');
 const { sendToEmail, withdrawToWallet } = require('../../services/transferService');
+const { v4: uuidv4 } = require('uuid');
 
 // Import config items including NETWORK_NAMES
 const { EMAIL_REGEX, NETWORK_NAMES } = require('../../config');
 
 /**
- * For "wallet" method: extract the single wallet’s lines from full balances (so we don’t show them all).
+ * For "wallet" method: extract the single wallet's lines from full balances (so we don't show them all).
  */
 function extractSingleWalletInfo(formattedBalances, walletIdsByNetwork, selectedWalletId) {
   let sourceWalletName = 'Default Wallet';
@@ -48,7 +49,7 @@ function extractSingleWalletInfo(formattedBalances, walletIdsByNetwork, selected
         // If we found the heading previously, this is likely the balance
         return `${headingLine}\n     ${line.trim()}`;
       } else if (line.trim().startsWith('-') && line.includes('0x')) {
-        // We’ve moved on to a new heading
+        // We've moved on to a new heading
         inSection = false;
       }
     }
@@ -151,14 +152,8 @@ const transferScene = new Scenes.WizardScene(
       ctx.scene.session.data.current_message_id = ctx.callbackQuery.message.message_id;
       return ctx.wizard.next();
     } else if (action === 'batch') {
-      await ctx.editMessageText(
-        'Batch send is not fully implemented yet. Please choose another option.',
-        Markup.inlineKeyboard([
-          [Markup.button.callback('« Back', 'back_to_transfer_options')]
-        ])
-      );
-      ctx.scene.session.data.current_message_id = ctx.callbackQuery.message.message_id;
-      return; // remain in step
+      await getPayeesForBatchSelection(ctx);
+      return ctx.wizard.next();
     }
   },
   
@@ -262,7 +257,7 @@ const transferScene = new Scenes.WizardScene(
       }
       
       if (action.startsWith('select_wallet_early_')) {
-        // user switched wallet in the “email” context
+        // user switched wallet in the "email" context
         const walletId = action.replace('select_wallet_early_', '');
         ctx.scene.session.data.selected_wallet = walletId;
         await refreshEmailFlowWallet(ctx);
@@ -416,7 +411,7 @@ const transferScene = new Scenes.WizardScene(
           return;
         }
         
-        // For wallet method: show only the single wallet’s info
+        // For wallet method: show only the single wallet's info
         const singleInfo = extractSingleWalletInfo(
           formattedBalances,
           walletIdsByNetwork,
@@ -471,6 +466,103 @@ const transferScene = new Scenes.WizardScene(
         ctx.wizard.next();
         return;
       }
+    }
+    
+    // Handle batch payee amount input
+    if (ctx.scene.session.data.waiting_for_batch_amount && ctx.message && ctx.message.text) {
+      const amountText = ctx.message.text.trim();
+      try { await ctx.deleteMessage(ctx.message.message_id); } catch {}
+      
+      let amount;
+      try {
+        amount = parseFloat(amountText);
+        if (isNaN(amount)) throw new Error('Not a number');
+        if (amount <= 0) throw new Error('Amount must be greater than 0');
+      } catch (error) {
+        if (ctx.scene.session.data.current_message_id) {
+          await ctx.telegram.editMessageText(
+            ctx.chat.id,
+            ctx.scene.session.data.current_message_id,
+            null,
+            `❌ Invalid amount: ${error.message}. Please enter a valid number.`,
+            {
+              parse_mode: 'Markdown',
+              ...Markup.inlineKeyboard([
+                [Markup.button.callback('Cancel', 'cancel_transfer')]
+              ])
+            }
+          );
+          return;
+        }
+      }
+      
+      // Get the current payee
+      const selectedPayees = ctx.scene.session.data.selected_batch_payees || [];
+      const currentIndex = ctx.scene.session.data.current_batch_payee_index || 0;
+      const currentPayee = selectedPayees[currentIndex];
+      
+      // Save the amount
+      if (!ctx.scene.session.data.batch_payee_amounts) {
+        ctx.scene.session.data.batch_payee_amounts = [];
+      }
+      
+      ctx.scene.session.data.batch_payee_amounts.push({
+        id: currentPayee.id,
+        email: currentPayee.email,
+        amount: amount
+      });
+      
+      // Move to next payee
+      ctx.scene.session.data.current_batch_payee_index = currentIndex + 1;
+      ctx.scene.session.data.waiting_for_batch_amount = false;
+      
+      // No loading indication - immediately ask for the next payee amount or show confirmation
+      await promptForPayeeAmount(ctx);
+      return;
+    }
+    
+    // Handle the same amount for all payees
+    if (ctx.scene.session.data.waiting_for_batch_same_amount && ctx.message && ctx.message.text) {
+      const amountText = ctx.message.text.trim();
+      try { await ctx.deleteMessage(ctx.message.message_id); } catch {}
+      
+      let amount;
+      try {
+        amount = parseFloat(amountText);
+        if (isNaN(amount)) throw new Error('Not a number');
+        if (amount <= 0) throw new Error('Amount must be greater than 0');
+      } catch (error) {
+        if (ctx.scene.session.data.current_message_id) {
+          await ctx.telegram.editMessageText(
+            ctx.chat.id,
+            ctx.scene.session.data.current_message_id,
+            null,
+            `❌ Invalid amount: ${error.message}. Please enter a valid number.`,
+            {
+              parse_mode: 'Markdown',
+              ...Markup.inlineKeyboard([
+                [Markup.button.callback('Cancel', 'cancel_transfer')]
+              ])
+            }
+          );
+          return;
+        }
+      }
+      
+      // Get all selected payees
+      const selectedPayees = ctx.scene.session.data.selected_batch_payees || [];
+      
+      // Save the same amount for all payees
+      ctx.scene.session.data.batch_payee_amounts = selectedPayees.map(payee => ({
+        id: payee.id,
+        email: payee.email,
+        amount: amount
+      }));
+      
+      // Skip to confirmation since we've set the amount for all
+      ctx.scene.session.data.waiting_for_batch_same_amount = false;
+      await showBatchConfirmation(ctx);
+      return;
     }
     
     // If we arrive here unhandled
@@ -774,7 +866,7 @@ async function showPayeeSelection(ctx) {
 }
 
 /**
- * Refresh the “email method” message after user changes wallet. 
+ * Refresh the "email method" message after user changes wallet. 
  * In email method, we display the entire `formattedBalances`.
  */
 async function refreshEmailFlowWallet(ctx) {
@@ -1018,7 +1110,7 @@ transferScene.action('change_source_wallet_early', async (ctx) => {
   }
 });
 
-// If user clicks “wallet_selection_header”, we ignore
+// If user clicks "wallet_selection_header", we ignore
 transferScene.action('wallet_selection_header', async (ctx) => {
   await ctx.answerCbQuery('Select a wallet from the options below');
 });
@@ -1070,6 +1162,498 @@ transferScene.action('back_to_amount_prompt', async (ctx) => {
 transferScene.command('cancel', async (ctx) => {
   await ctx.reply('Transfer cancelled. You can start again with /send.');
   return ctx.scene.leave();
+});
+
+/**
+ * Show payees for batch selection with multi-select capability
+ */
+async function getPayeesForBatchSelection(ctx) {
+  const userId = ctx.from.id;
+  try {
+    await ctx.editMessageText('Loading your payees for batch send...');
+    ctx.scene.session.data.current_message_id = ctx.callbackQuery.message.message_id;
+    
+    const payees = await getPayees(userId);
+    let keyboard = [];
+    
+    if (payees && payees.length) {
+      // Initialize selected payees array if it doesn't exist
+      if (!ctx.scene.session.data.selected_batch_payees) {
+        ctx.scene.session.data.selected_batch_payees = [];
+      }
+      
+      // Create a keyboard with checkboxes to indicate selection
+      for (let i = 0; i < payees.length; i++) {
+        const payee = payees[i];
+        const displayName = payee.nickName || payee.email;
+        
+        // Check if this payee is already selected
+        const isSelected = ctx.scene.session.data.selected_batch_payees.some(p => p.id === payee.id);
+        const selectSymbol = isSelected ? '✅ ' : '';
+        
+        keyboard.push([
+          Markup.button.callback(`${selectSymbol}${displayName}`, `batch_select_${payee.id}`)
+        ]);
+      }
+    }
+    
+    // Add continue button (only if at least one payee is selected)
+    const hasSelected = (ctx.scene.session.data.selected_batch_payees || []).length > 0;
+    
+    keyboard.push([
+      Markup.button.callback('« Back', 'back_to_transfer_options'),
+      ...(hasSelected ? [Markup.button.callback('Continue »', 'batch_continue')] : [])
+    ]);
+    keyboard.push([Markup.button.callback('❌ Cancel', 'cancel_transfer')]);
+    
+    const selectedCount = (ctx.scene.session.data.selected_batch_payees || []).length;
+    const selectText = selectedCount > 0 ? `(${selectedCount} selected)` : '';
+    
+    await ctx.telegram.editMessageText(
+      ctx.chat.id,
+      ctx.scene.session.data.current_message_id,
+      null,
+      `*Select Recipients for Batch Send ${selectText}*\n\n${payees.length === 0 ? 'You don\'t have any saved payees yet.' : 'Tap on a payee to select/deselect'}`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard(keyboard)
+      }
+    );
+  } catch (error) {
+    logger.error(`Error showing batch payee selection: ${error.message}`);
+    if (ctx.scene.session.data.current_message_id) {
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        ctx.scene.session.data.current_message_id,
+        null,
+        `❌ Error loading payees: ${error.message}\n\nPlease try again.`,
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('« Back', 'back_to_transfer_options')]
+          ])
+        }
+      );
+    } else {
+      await ctx.reply(
+        `❌ Error loading payees: ${error.message}\n\nPlease try again.`,
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('« Back', 'back_to_transfer_options')]
+          ])
+        }
+      );
+    }
+  }
+}
+
+/**
+ * Prompt for the amount for a specific payee in the batch
+ */
+async function promptForPayeeAmount(ctx) {
+  const selectedPayees = ctx.scene.session.data.selected_batch_payees || [];
+  const currentIndex = ctx.scene.session.data.current_batch_payee_index || 0;
+  
+  if (currentIndex >= selectedPayees.length) {
+    // All payees have been processed, show confirmation
+    await showBatchConfirmation(ctx);
+    return;
+  }
+  
+  const currentPayee = selectedPayees[currentIndex];
+  const displayName = currentPayee.nickName || currentPayee.email;
+  
+  // Show progress
+  const progress = `(${currentIndex + 1}/${selectedPayees.length})`;
+  
+  // Create collected amounts summary if we have already collected some
+  let collectedSummary = '';
+  if (ctx.scene.session.data.batch_payee_amounts && ctx.scene.session.data.batch_payee_amounts.length > 0) {
+    collectedSummary = '*Collected Amounts:*\n';
+    let totalSoFar = 0;
+    
+    for (const payeeAmount of ctx.scene.session.data.batch_payee_amounts) {
+      const payee = selectedPayees.find(p => p.id === payeeAmount.id);
+      const name = payee ? (payee.nickName || payee.email) : payeeAmount.email;
+      collectedSummary += `${name}: ${payeeAmount.amount.toFixed(2)} USDC\n`;
+      totalSoFar += payeeAmount.amount;
+    }
+    
+    collectedSummary += `\n*Total so far:* ${totalSoFar.toFixed(2)} USDC\n\n`;
+  }
+  
+  // Get formatted wallet balances
+  const [formattedBalances, walletIdsByNetwork] = await getFormattedWalletBalances(ctx.from.id);
+  
+  // Create keyboard with network buttons as shown in the screenshot
+  const keyboard = [];
+  
+  // Network buttons row (showing all networks but they're not actually selectable)
+  if (walletIdsByNetwork && typeof walletIdsByNetwork === 'object') {
+    const netKeys = Object.keys(walletIdsByNetwork);
+    const networkRow = [];
+    
+    for (const netKey of netKeys) {
+      const displayName = NETWORK_NAMES[netKey] || netKey;
+      const isSelected = walletIdsByNetwork[netKey] === ctx.scene.session.data.selected_wallet;
+      // Make a checkmark on the selected one but all buttons do the same thing
+      const label = `${isSelected ? '✓ ' : ''}${displayName}`;
+      networkRow.push(Markup.button.callback(label, 'wallet_selection_header'));
+    }
+    
+    if (networkRow.length > 0) {
+      keyboard.push(networkRow);
+    }
+  }
+  
+  // Add "Use same amount for all" option only for first payee
+  if (currentIndex === 0) {
+    keyboard.push([Markup.button.callback('Use same amount for all', 'batch_same_amount')]);
+  }
+  
+  // Cancel button
+  keyboard.push([Markup.button.callback('Cancel', 'cancel_transfer')]);
+  
+  await ctx.telegram.editMessageText(
+    ctx.chat.id,
+    ctx.scene.session.data.current_message_id,
+    null,
+    `*Batch Send ${progress}*\n\n` +
+    `*Recipient:* ${displayName}\n` +
+    `*Email:* ${currentPayee.email}\n\n` +
+    `*Your Wallet Balances*\n` +
+    `${formattedBalances}\n\n` +
+    `${collectedSummary}` +
+    `Please enter the amount you want to send to this recipient (in USDC):`,
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard(keyboard)
+    }
+  );
+  
+  // Set waiting flag to handle text input
+  ctx.scene.session.data.waiting_for_batch_amount = true;
+}
+
+/**
+ * Show final batch confirmation
+ */
+async function showBatchConfirmation(ctx) {
+  try {
+    const selectedPayees = ctx.scene.session.data.selected_batch_payees || [];
+    const payeeAmounts = ctx.scene.session.data.batch_payee_amounts || [];
+    
+    if (selectedPayees.length === 0 || payeeAmounts.length === 0) {
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        ctx.scene.session.data.current_message_id,
+        null,
+        'No recipients or amounts specified. Please start over.',
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('« Back', 'back_to_transfer_options')]
+          ])
+        }
+      );
+      return;
+    }
+    
+    // Find wallet name
+    let sourceWalletName = 'Default Wallet';
+    const selectedWallet = ctx.scene.session.data.selected_wallet;
+    const walletIdsByNetwork = ctx.scene.session.data.walletIdsByNetwork;
+    
+    if (walletIdsByNetwork && typeof walletIdsByNetwork === 'object') {
+      for (const [netKey, wId] of Object.entries(walletIdsByNetwork)) {
+        if (wId === selectedWallet) {
+          sourceWalletName = NETWORK_NAMES[netKey] || netKey;
+          break;
+        }
+      }
+    }
+    
+    // Calculate total amount
+    let totalAmount = 0;
+    for (const amt of payeeAmounts) {
+      totalAmount += amt.amount;
+    }
+    
+    // Build summary message
+    let msg = '*Batch Transfer Summary*\n\n';
+    msg += `*Source Wallet:* ${sourceWalletName}\n`;
+    msg += `*Number of Recipients:* ${selectedPayees.length}\n`;
+    msg += `*Total Amount:* ${totalAmount.toFixed(2)} USDC\n\n`;
+    msg += '*Recipients:*\n';
+    
+    for (let i = 0; i < selectedPayees.length; i++) {
+      const payee = selectedPayees[i];
+      const payeeAmount = payeeAmounts.find(pa => pa.id === payee.id);
+      if (payeeAmount) {
+        msg += `${i + 1}. ${payee.nickName || payee.email}: ${payeeAmount.amount.toFixed(2)} USDC\n`;
+      }
+    }
+    
+    msg += '\nDo you want to proceed with this batch transfer?';
+    
+    const keyboard = [
+      [
+        Markup.button.callback('✅ Confirm', 'confirm_batch_transfer'),
+        Markup.button.callback('❌ Cancel', 'cancel_transfer')
+      ]
+    ];
+    
+    await ctx.telegram.editMessageText(
+      ctx.chat.id,
+      ctx.scene.session.data.current_message_id,
+      null,
+      msg,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard(keyboard)
+      }
+    );
+  } catch (error) {
+    logger.error(`Error showing batch confirmation: ${error.message}`);
+    await ctx.telegram.editMessageText(
+      ctx.chat.id,
+      ctx.scene.session.data.current_message_id,
+      null,
+      `❌ Error: ${error.message}\n\nPlease try again.`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('« Back', 'back_to_transfer_options')]
+        ])
+      }
+    );
+  }
+}
+
+/**
+ * Process batch transfer
+ */
+async function processBatchTransfer(ctx) {
+  try {
+    await ctx.editMessageText('Processing your batch transfer...', { parse_mode: 'Markdown' });
+    
+    const userId = ctx.from.id;
+    const selectedPayees = ctx.scene.session.data.selected_batch_payees || [];
+    const payeeAmounts = ctx.scene.session.data.batch_payee_amounts || [];
+    const selectedWallet = ctx.scene.session.data.selected_wallet;
+    
+    // Prepare the API payload
+    const requests = [];
+    
+    for (const payee of selectedPayees) {
+      const payeeAmount = payeeAmounts.find(pa => pa.id === payee.id);
+      if (payeeAmount) {
+        // Convert amount to API format (multiply by 1e8)
+        const amountForApi = Math.floor(payeeAmount.amount * 1e8).toString();
+        
+        const requestId = uuidv4();
+        const request = {
+          email: payee.email,
+          amount: amountForApi,
+          purposeCode: 'self',
+          currency: 'USDC'
+        };
+        
+        if (payee.id) {
+          request.payeeId = payee.id;
+        }
+        
+        if (selectedWallet) {
+          request.walletId = selectedWallet;
+        }
+        
+        requests.push({
+          requestId,
+          request
+        });
+      }
+    }
+    
+    const payload = { requests };
+    
+    logger.info(`Sending batch transfer with payload: ${JSON.stringify(payload)}`);
+    
+    const response = await makeApiRequest(
+      'POST',
+      '/api/transfers/send-batch',
+      userId,
+      payload
+    );
+    
+    if (response) {
+      // Handle the response based on its structure
+      let resultMsg = `✅ *Batch Transfer Completed*\n\n`;
+      
+      // Check if response is an array of results
+      if (Array.isArray(response)) {
+        const successCount = response.filter(res => res.status === 'success').length;
+        const failCount = response.length - successCount;
+        
+        resultMsg += `*Successful:* ${successCount} transfers\n`;
+        if (failCount > 0) {
+          resultMsg += `*Failed:* ${failCount} transfers\n\n`;
+          resultMsg += 'Some transfers may have failed. Check your transaction history for details.';
+        } else {
+          resultMsg += '\nAll transfers were successful!';
+        }
+      } else if (response.status === 'success') {
+        // Single success response
+        resultMsg += 'All transfers were successful!';
+      } else {
+        // Handle other response formats
+        resultMsg += 'Transfer completed. Check your transaction history for details.';
+      }
+      
+      await ctx.editMessageText(resultMsg, { parse_mode: 'Markdown' });
+      
+      // After success, let them do new commands
+      await ctx.reply('Batch transaction complete! You can now use /send or other commands any time.');
+    } else {
+      throw new Error('Invalid response from server');
+    }
+  } catch (error) {
+    logger.error(`Batch transfer error: ${error.message}`);
+    let errorMessage = 'An error occurred during the batch transfer.';
+    if (error.message) {
+      errorMessage = error.message;
+    }
+    await ctx.editMessageText(
+      `❌ *Batch Transfer Failed*\n\n${errorMessage}\n\nPlease try again later.`,
+      { parse_mode: 'Markdown' }
+    );
+  }
+  
+  // End the scene so user can immediately do new commands
+  return ctx.scene.leave();
+}
+
+// Handle batch selection callbacks
+transferScene.action(/^batch_select_/, async (ctx) => {
+  await ctx.answerCbQuery();
+  
+  const payeeId = ctx.callbackQuery.data.replace('batch_select_', '');
+  
+  // Initialize selected payees array if it doesn't exist
+  if (!ctx.scene.session.data.selected_batch_payees) {
+    ctx.scene.session.data.selected_batch_payees = [];
+  }
+  
+  // Get the payees again to have full data
+  const payees = await getPayees(ctx.from.id);
+  const selectedPayee = payees.find(p => p.id === payeeId);
+  
+  if (!selectedPayee) {
+    await ctx.answerCbQuery('Payee not found');
+    return;
+  }
+  
+  // Check if already selected
+  const existingIndex = ctx.scene.session.data.selected_batch_payees.findIndex(p => p.id === payeeId);
+  
+  if (existingIndex >= 0) {
+    // Remove if already selected
+    ctx.scene.session.data.selected_batch_payees.splice(existingIndex, 1);
+  } else {
+    // Add if not selected
+    ctx.scene.session.data.selected_batch_payees.push(selectedPayee);
+  }
+  
+  // Refresh the display - No loading needed
+  await getPayeesForBatchSelection(ctx);
+});
+
+// Continue with batch selection
+transferScene.action('batch_continue', async (ctx) => {
+  await ctx.answerCbQuery();
+  
+  try {
+    const selectedPayees = ctx.scene.session.data.selected_batch_payees || [];
+    if (selectedPayees.length === 0) {
+      await ctx.editMessageText(
+        'No recipients selected. Please select at least one recipient.',
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('« Back', 'back_to_transfer_options')]
+          ])
+        }
+      );
+      return;
+    }
+    
+    // Initialize batch payee amounts array
+    ctx.scene.session.data.batch_payee_amounts = [];
+    ctx.scene.session.data.current_batch_payee_index = 0;
+    
+    // Get balances
+    const [formattedBalances, walletIdsByNetwork] = await getFormattedWalletBalances(ctx.from.id);
+    ctx.scene.session.data.walletIdsByNetwork = walletIdsByNetwork;
+    
+    // Determine default wallet
+    let defaultWalletId = null;
+    if (walletIdsByNetwork && typeof walletIdsByNetwork === 'object') {
+      const netKeys = Object.keys(walletIdsByNetwork);
+      if (netKeys.length) {
+        for (const n of netKeys) {
+          if (walletIdsByNetwork[n]?.isDefault) {
+            defaultWalletId = walletIdsByNetwork[n];
+            break;
+          }
+        }
+        if (!defaultWalletId) {
+          defaultWalletId = walletIdsByNetwork[netKeys[0]];
+        }
+      }
+    }
+    ctx.scene.session.data.selected_wallet = defaultWalletId;
+    
+    // Show the first payee
+    await promptForPayeeAmount(ctx);
+  } catch (error) {
+    logger.error(`Error starting batch amount collection: ${error.message}`);
+    await ctx.editMessageText(
+      `❌ Error: ${error.message}\n\nPlease try again.`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('« Back', 'back_to_transfer_options')]
+        ])
+      }
+    );
+  }
+});
+
+// Use same amount for all payees
+transferScene.action('batch_same_amount', async (ctx) => {
+  await ctx.answerCbQuery();
+  
+  await ctx.telegram.editMessageText(
+    ctx.chat.id,
+    ctx.scene.session.data.current_message_id,
+    null,
+    'Please enter the amount you want to send to ALL selected recipients (in USDC):',
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('Cancel', 'cancel_transfer')]
+      ])
+    }
+  );
+  
+  // Set waiting flag for same amount for all
+  ctx.scene.session.data.waiting_for_batch_same_amount = true;
+});
+
+// Confirm batch transfer
+transferScene.action('confirm_batch_transfer', async (ctx) => {
+  await ctx.answerCbQuery();
+  await processBatchTransfer(ctx);
 });
 
 module.exports = {
