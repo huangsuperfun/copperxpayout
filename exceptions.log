@@ -7,3 +7,70 @@ FetchError: request to https://api.telegram.org/bot7572569731:[REDACTED]/getMe f
     at emitErrorNT (node:internal/streams/destroy:169:8)
     at emitErrorCloseNT (node:internal/streams/destroy:128:3)
     at process.processTicksAndRejections (node:internal/process/task_queues:82:21)
+2025-03-25 00:18:50 - ERROR: uncaughtException: request to https://api.telegram.org/bot7572569731:[REDACTED]/getMe failed, reason: getaddrinfo ENOTFOUND api.telegram.org
+FetchError: request to https://api.telegram.org/bot7572569731:[REDACTED]/getMe failed, reason: getaddrinfo ENOTFOUND api.telegram.org
+    at ClientRequest.<anonymous> (/Users/trung/Downloads/projectdev/bountytele/node_modules/node-fetch/lib/index.js:1501:11)
+    at ClientRequest.emit (node:events:519:28)
+    at TLSSocket.socketErrorListener (node:_http_client:500:9)
+    at TLSSocket.emit (node:events:519:28)
+    at emitErrorNT (node:internal/streams/destroy:169:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:128:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:82:21)
+2025-03-25 00:19:32 - ERROR: uncaughtException: request to https://api.telegram.org/bot7572569731:[REDACTED]/getMe failed, reason: getaddrinfo ENOTFOUND api.telegram.org
+FetchError: request to https://api.telegram.org/bot7572569731:[REDACTED]/getMe failed, reason: getaddrinfo ENOTFOUND api.telegram.org
+    at ClientRequest.<anonymous> (/Users/trung/Downloads/projectdev/bountytele/node_modules/node-fetch/lib/index.js:1501:11)
+    at ClientRequest.emit (node:events:519:28)
+    at TLSSocket.socketErrorListener (node:_http_client:500:9)
+    at TLSSocket.emit (node:events:519:28)
+    at emitErrorNT (node:internal/streams/destroy:169:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:128:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:82:21)
+2025-03-25 09:55:12 - ERROR: uncaughtException: request to https://api.telegram.org/bot7572569731:[REDACTED]/getMe failed, reason: 
+FetchError: request to https://api.telegram.org/bot7572569731:[REDACTED]/getMe failed, reason: 
+    at ClientRequest.<anonymous> (/Users/trung/Downloads/projectdev/bountytele/node_modules/node-fetch/lib/index.js:1501:11)
+    at ClientRequest.emit (node:events:519:28)
+    at TLSSocket.socketErrorListener (node:_http_client:500:9)
+    at TLSSocket.emit (node:events:519:28)
+    at emitErrorNT (node:internal/streams/destroy:169:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:128:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:82:21)
+2025-03-25 10:04:58 - ERROR: uncaughtException: Cannot read properties of undefined (reading 'batchPayeeData')
+TypeError: Cannot read properties of undefined (reading 'batchPayeeData')
+    at /Users/trung/Downloads/projectdev/bountytele/src/bot/commands/transfer.js:1029:41
+    at /Users/trung/Downloads/projectdev/bountytele/node_modules/telegraf/lib/composer.js:165:111
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async execute (/Users/trung/Downloads/projectdev/bountytele/node_modules/telegraf/lib/composer.js:518:17)
+    at async /Users/trung/Downloads/projectdev/bountytele/node_modules/telegraf/lib/composer.js:519:21
+    at async execute (/Users/trung/Downloads/projectdev/bountytele/node_modules/telegraf/lib/composer.js:518:17)
+    at async /Users/trung/Downloads/projectdev/bountytele/node_modules/telegraf/lib/composer.js:519:21
+    at async execute (/Users/trung/Downloads/projectdev/bountytele/node_modules/telegraf/lib/composer.js:518:17)
+    at async /Users/trung/Downloads/projectdev/bountytele/node_modules/telegraf/lib/composer.js:519:21
+    at async execute (/Users/trung/Downloads/projectdev/bountytele/node_modules/telegraf/lib/composer.js:518:17)
+2025-03-25 14:22:57 - ERROR: uncaughtException: Bot is not running!
+Error: Bot is not running!
+    at Telegraf.stop (/Users/trung/Downloads/projectdev/bountytele/node_modules/telegraf/lib/telegraf.js:218:19)
+    at process.<anonymous> (/Users/trung/Downloads/projectdev/bountytele/src/bot/telegramBot.js:199:38)
+    at Object.onceWrapper (node:events:634:26)
+    at process.emit (node:events:531:35)
+2025-03-25 15:54:35 - ERROR: uncaughtException: Identifier 'transferScene' has already been declared
+/Users/trung/Downloads/projectdev/bountytele/src/bot/commands/transfer.js:1485
+const transferScene = new Scenes.WizardScene(
+      ^
+
+SyntaxError: Identifier 'transferScene' has already been declared
+    at wrapSafe (node:internal/modules/cjs/loader:1281:20)
+    at Module._compile (node:internal/modules/cjs/loader:1321:27)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
+    at Module.load (node:internal/modules/cjs/loader:1208:32)
+    at Module._load (node:internal/modules/cjs/loader:1024:12)
+    at Module.require (node:internal/modules/cjs/loader:1233:19)
+    at require (node:internal/modules/helpers:179:18)
+    at Object.<anonymous> (/Users/trung/Downloads/projectdev/bountytele/src/bot/telegramBot.js:12:27)
+    at Module._compile (node:internal/modules/cjs/loader:1358:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
+2025-03-25 16:50:25 - ERROR: uncaughtException: Bot is not running!
+Error: Bot is not running!
+    at Telegraf.stop (/Users/trung/Downloads/projectdev/bountytele/node_modules/telegraf/lib/telegraf.js:218:19)
+    at process.<anonymous> (/Users/trung/Downloads/projectdev/bountytele/src/bot/telegramBot.js:199:38)
+    at Object.onceWrapper (node:events:634:26)
+    at process.emit (node:events:531:35)

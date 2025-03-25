@@ -37,78 +37,26 @@ let botInstance = null;
 /**
  * Connect to Pusher for real-time notifications
  * @param {number} userId - Telegram user ID
- * @param {string} accessToken - User's access token (optional)
- * @param {string} organizationId - User's organization ID (optional)
+ * @param {string} accessToken - User's access token
+ * @param {string} organizationId - User's organization ID
  */
-async function connectToPusher(userId, accessToken = null, organizationId = null) {
+async function connectToPusher(userId, accessToken, organizationId) {
   try {
-    // Log that we're attempting to connect
-    logger.info(`Attempting to connect to Pusher for user ${userId}`);
-    
     // Check if there's an existing client
     if (pusherClients[userId]) {
-      logger.info(`Found existing Pusher client for user ${userId}, disconnecting...`);
       // Disconnect existing client
       await pusherClients[userId].disconnect();
       delete pusherClients[userId];
     }
     
-    // Get access token if not provided
-    if (!accessToken) {
-      logger.info(`No access token provided, retrieving for user ${userId}`);
-      const tokenData = await getUserToken(userId);
-      if (!tokenData || !tokenData.accessToken) {
-        logger.error(`Failed to get access token for user ${userId}`);
-        return;
-      }
-      accessToken = tokenData.accessToken;
-      logger.info(`Retrieved access token for user ${userId}: ${accessToken.substring(0, 10)}...`);
-    }
-    
-    // Get organization ID if not provided
-    if (!organizationId) {
-      logger.info(`No organization ID provided, retrieving for user ${userId}`);
-      organizationId = await getOrganizationId(userId);
-      if (organizationId) {
-        logger.info(`Retrieved organization ID for user ${userId}: ${organizationId}`);
-      } else {
-        logger.warn(`No organization ID found for user ${userId}`);
-      }
-    }
-    
     // Create new Pusher client
-    logger.info(`Creating new PusherClient for user ${userId} with org ID ${organizationId || 'unknown'}`);
     const pusherClient = new PusherClient(userId, accessToken, organizationId);
+    pusherClient.initialize();
     
     // Store the client
     pusherClients[userId] = pusherClient;
     
-    // Subscribe to channels if organization ID is available
-    if (organizationId) {
-      // Try all possible channel formats
-      const channelNames = [
-        `org-${organizationId}`,
-        `private-org-${organizationId}`
-      ];
-      
-      for (const channelName of channelNames) {
-        logger.info(`Subscribing to channel ${channelName} for user ${userId}`);
-        await pusherClient.subscribe(channelName).catch(err => {
-          logger.warn(`Failed to subscribe to ${channelName}: ${err.message}`);
-        });
-      }
-    }
-    
-    logger.info(`Pusher setup completed for user ${userId}`);
-    
-    // Test connection
-    setTimeout(() => {
-      if (pusherClient.connected) {
-        logger.info(`Pusher is connected for user ${userId}`);
-      } else {
-        logger.warn(`Pusher connection not confirmed for user ${userId}`);
-      }
-    }, 3000);
+    logger.info(`Connected to Pusher for user ${userId}`);
   } catch (error) {
     logger.error(`Failed to connect to Pusher: ${error.message}`);
   }
@@ -121,12 +69,7 @@ async function connectToPusher(userId, accessToken = null, organizationId = null
  */
 async function handleDepositNotification(userId, data) {
   try {
-    // Log the received notification with full details
-    logger.info(`DEPOSIT NOTIFICATION RECEIVED for user ${userId}`);
-    logger.info(`Notification data: ${JSON.stringify(data)}`);
-    
     if (!botInstance) {
-      logger.error(`Bot instance not initialized when handling deposit for user ${userId}`);
       throw new Error('Bot instance not initialized');
     }
     
@@ -134,39 +77,17 @@ async function handleDepositNotification(userId, data) {
     const message = `
 💰 *New Deposit Received*
 
-Amount: ${data.amount || '0'} ${data.currency || 'USDC'}
-Network: ${data.network || 'Unknown'}
-${data.address ? `Address: ${data.address.slice(0, 6)}...${data.address.slice(-4)}\n` : ''}Transaction ID: \`${data.transactionId || 'Unknown'}\`
+Amount: ${data.amount} ${data.currency}
+Network: ${data.network}
+Transaction ID: \`${data.transactionId}\`
     `.trim();
     
-    // Try multiple methods to send the notification
-    try {
-      // Method 1: Direct telegram.sendMessage
-      logger.info(`Attempting to send deposit notification to user ${userId} (Method 1)`);
-      await botInstance.telegram.sendMessage(userId, message, {
-        parse_mode: 'Markdown'
-      });
-      logger.info(`Successfully sent deposit notification to user ${userId} (Method 1)`);
-    } catch (error1) {
-      logger.error(`Failed to send notification (Method 1): ${error1.message}`);
-      
-      try {
-        // Method 2: Get chat and send
-        logger.info(`Attempting to send deposit notification to user ${userId} (Method 2)`);
-        await botInstance.telegram.getChat(userId).then(async (chat) => {
-          await botInstance.telegram.sendMessage(chat.id, message, {
-            parse_mode: 'Markdown'
-          });
-        });
-        logger.info(`Successfully sent deposit notification to user ${userId} (Method 2)`);
-      } catch (error2) {
-        logger.error(`Failed to send notification (Method 2): ${error2.message}`);
-        throw new Error(`Failed to send notification: ${error1.message}, ${error2.message}`);
-      }
-    }
+    // Send the notification
+    await botInstance.telegram.sendMessage(userId, message, {
+      parse_mode: 'Markdown'
+    });
   } catch (error) {
-    logger.error(`Error handling deposit notification: ${error.message}`);
-    logger.error(`Stack trace: ${error.stack}`);
+    logger.error(`Error sending deposit notification: ${error.message}`);
   }
 }
 
@@ -177,15 +98,10 @@ function startBot() {
   // Create the bot
   const bot = new Telegraf(config.TELEGRAM_BOT_TOKEN);
   botInstance = bot;
-  
-  // Set the bot instance in PusherClient
   PusherClient.setBotInstance(bot);
   
   // Set the deposit notification handler
   PusherClient.setDepositNotificationHandler(handleDepositNotification);
-  
-  // Log successful setup
-  logger.info('PusherClient configured with bot instance and notification handler');
   
   // Set up sessions and scenes middleware
   const stage = new Scenes.Stage([
@@ -197,16 +113,6 @@ function startBot() {
   
   bot.use(session());
   bot.use(stage.middleware());
-  
-  // Add debugging middleware in debug mode
-  if (config.DEBUG) {
-    bot.use((ctx, next) => {
-      const update = ctx.update;
-      const updateId = update.update_id;
-      logger.debug(`Received update #${updateId}`);
-      return next();
-    });
-  }
   
   // Set up command handlers
   bot.start(async (ctx) => {
@@ -238,6 +144,8 @@ function startBot() {
   // Withdrawal command
   bot.command('withdrawal', (ctx) => ctx.scene.enter('withdrawal-scene'));
   
+
+  
   // Transactions command
   bot.command('transactions', transactionsCommand);
   bot.action(/^tx_/, transactionCallbackHandler);
@@ -248,7 +156,6 @@ function startBot() {
   bot.action(/^edit_payee_[a-zA-Z0-9-]+$/, payeeCallback);
   bot.action(/^delete_payee_[a-zA-Z0-9-]+$/, payeeCallback);
   bot.action(/^delete_payee_confirm_[a-zA-Z0-9-]+$/, payeeCallback);
-  
   // Help command
   bot.command('help', helpCommand);
   

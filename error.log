@@ -1,0 +1,14 @@
+2025-03-25 09:55:32 - ERROR: Failed to connect to Pusher: Cannot read properties of undefined (reading '382182273')
+2025-03-25 14:22:31 - ERROR: Failed to connect to Pusher: Cannot read properties of undefined (reading '382182273')
+2025-03-25 14:49:23 - ERROR: Error showing batch amount prompt: request to https://api.telegram.org/bot7572569731:[REDACTED]/editMessageText failed, reason: 
+2025-03-25 14:49:45 - ERROR: Error showing batch amount prompt: 400: Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+2025-03-25 14:50:14 - ERROR: Error showing batch amount prompt: 400: Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+2025-03-25 14:56:30 - ERROR: Error showing batch amount prompt: 400: Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+2025-03-25 15:01:11 - ERROR: Error showing batch amount prompt: 400: Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+2025-03-25 15:06:00 - ERROR: Error showing batch amount prompt: 400: Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+2025-03-25 15:38:01 - ERROR: Error showing batch amount prompt: 400: Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+2025-03-25 15:43:20 - ERROR: Error showing batch amount prompt: 400: Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+2025-03-25 16:09:22 - ERROR: Error showing batch amount prompt: 400: Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+2025-03-25 16:35:43 - ERROR: Error showing batch amount prompt: 400: Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+2025-03-25 16:36:29 - ERROR: Error showing batch amount prompt: 400: Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+2025-03-25 16:36:32 - ERROR: Error showing batch amount prompt: 400: Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
